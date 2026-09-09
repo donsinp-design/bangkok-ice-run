@@ -7,9 +7,9 @@
 <meta name="theme-color" content="#0a0b0c">
 <title>Bangkok Ice Run</title>
 <style>
-*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent;-webkit-user-select:none;user-select:none;-webkit-touch-callout:none}
 html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#08090a;color:#fff;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
-canvas#game{position:fixed;inset:0;width:100%;height:100%;touch-action:none;background:#08090a;image-rendering:pixelated}
+canvas#game{position:fixed;inset:0;width:100%;height:100%;touch-action:none;background:#08090a;image-rendering:pixelated;-webkit-user-drag:none}
 #hud{position:fixed;inset:0;z-index:10;pointer-events:none;text-shadow:2px 2px 0 #000}
 .panel{background:rgba(13,14,15,.88);border:2px solid #484a4b;box-shadow:3px 3px 0 rgba(0,0,0,.75)}
 #mission{position:absolute;left:12px;top:calc(12px + env(safe-area-inset-top));width:230px;padding:10px 12px;font-size:16px;font-weight:900;line-height:1.35}
@@ -20,10 +20,10 @@ canvas#game{position:fixed;inset:0;width:100%;height:100%;touch-action:none;back
 #minimapWrap{position:absolute;left:12px;top:calc(192px + env(safe-area-inset-top));width:165px;height:165px;padding:5px}
 #minimap{width:100%;height:100%;image-rendering:pixelated}
 #controls{position:fixed;inset:0;z-index:20;pointer-events:none}
-.pad{position:absolute;left:14px;bottom:calc(18px + env(safe-area-inset-bottom));width:150px;height:150px;pointer-events:auto}
-.btn{position:absolute;width:54px;height:54px;border:2px solid rgba(255,255,255,.72);background:rgba(10,10,11,.54);color:#fff;font:bold 22px monospace;display:grid;place-items:center;box-shadow:2px 2px 0 rgba(0,0,0,.65);border-radius:5px}
+.pad{position:absolute;left:14px;bottom:calc(18px + env(safe-area-inset-bottom));width:174px;height:174px;pointer-events:auto;display:grid;grid-template-columns:58px 58px 58px;grid-template-rows:58px 58px 58px}
+.btn{position:static;width:58px;height:58px;border:2px solid rgba(255,255,255,.72);background:rgba(10,10,11,.54);color:#fff;font:bold 22px monospace;display:grid;place-items:center;box-shadow:2px 2px 0 rgba(0,0,0,.65);border-radius:5px;-webkit-appearance:none;appearance:none;touch-action:none;padding:0;margin:0;line-height:1}
 .btn.on{background:rgba(255,255,255,.22);transform:translate(1px,1px)}
-.u{left:48px;top:0}.d{left:48px;bottom:0}.l{left:0;top:48px}.r{right:0;top:48px}
+.u{grid-column:2;grid-row:1}.l{grid-column:1;grid-row:2}.r{grid-column:3;grid-row:2}.d{grid-column:2;grid-row:3}
 #brake{position:absolute;right:18px;bottom:calc(24px + env(safe-area-inset-bottom));width:86px;height:86px;border-radius:50%;border:3px solid rgba(255,255,255,.8);background:rgba(184,47,39,.4);color:#fff;font:bold 11px monospace;letter-spacing:.08em;pointer-events:auto;box-shadow:3px 3px 0 #000}
 #message{position:absolute;left:50%;top:45%;transform:translate(-50%,-50%);padding:10px 14px;font-size:12px;font-weight:900;opacity:0;transition:opacity .12s;white-space:nowrap}
 #rotate{position:absolute;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));font-size:9px;opacity:.55}
@@ -61,7 +61,7 @@ const mini=document.getElementById('minimap'),mctx=mini.getContext('2d');
 const map=new Image();map.src=MAP;const tile=document.createElement('canvas'),tctx=tile.getContext('2d');let tileReady=false;map.onload=()=>{tile.width=TILE_W;tile.height=TILE_H;tctx.clearRect(0,0,TILE_W,TILE_H);tctx.drawImage(map,0,0,TILE_W,TILE_H,0,0,TILE_W,TILE_H);tileReady=true};
 const sprites={};Object.entries(SPRITES).forEach(([k,v])=>{const i=new Image();i.src=v;sprites[k]=i});
 let W=innerWidth,H=innerHeight,DPR=Math.min(devicePixelRatio||1,2),zoom=1.0;
-function resize(){W=innerWidth;H=innerHeight;DPR=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);ctx.setTransform(DPR,0,0,DPR,0,0);ctx.imageSmoothingEnabled=false;zoom=W>H?1.2:1.05}addEventListener('resize',resize);resize();
+function resize(){W=innerWidth;H=innerHeight;DPR=Math.min(devicePixelRatio||1,2);canvas.width=Math.round(W*DPR);canvas.height=Math.round(H*DPR);ctx.setTransform(DPR,0,0,DPR,0,0);ctx.imageSmoothingEnabled=false;zoom=W>H?1.0:.92}addEventListener('resize',resize);resize();
 
 const roads=[
 {x:292,y:0,w:106,h:1402},
@@ -72,7 +72,18 @@ const roads=[
 {x:0,y:1315,w:700,h:87}
 ];
 function mod(n,m){return ((n%m)+m)%m}
-function onRoad(x,y,r=12){if(x<r||x>TILE_W-r)return false;const ly=mod(y,TILE_H);return roads.some(a=>x+r>a.x&&x-r<a.x+a.w&&ly+r>a.y&&ly-r<a.y+a.h)}
+function onRoad(x,y,r=12){
+ if(x<r||x>TILE_W-r)return false;
+ const ly=mod(y,TILE_H),margin=24;
+ if(roads.some(a=>x+r>a.x-margin&&x-r<a.x+a.w+margin&&ly+r>a.y-margin&&ly-r<a.y+a.h+margin))return true;
+ if(!tileReady)return false;
+ const px=Math.max(1,Math.min(TILE_W-2,Math.round(x))),py=Math.max(1,Math.min(TILE_H-2,Math.round(ly)));
+ const d=tctx.getImageData(px,py,1,1).data;
+ const mx=Math.max(d[0],d[1],d[2]),mn=Math.min(d[0],d[1],d[2]),avg=(d[0]+d[1]+d[2])/3;
+ const looksPaved=(mx-mn<18&&avg>42&&avg<96);
+ const near=roads.some(a=>x>a.x-55&&x<a.x+a.w+55&&ly>a.y-55&&ly<a.y+a.h+55);
+ return looksPaved&&near;
+}
 
 const p={x:345,y:1240,vx:0,vy:0,dir:'n',ice:8,melt:0,money:215,timer:165,inv:0,trail:[],score:0};
 const keys=Object.create(null);
@@ -125,8 +136,33 @@ function update(dt,now){
 }
 
 function camera(){return{x:Math.max(0,Math.min(Math.max(0,TILE_W-W/zoom),p.x-W/(2*zoom))),y:p.y-H/(2*zoom)}}
-function drawMap(cam){const viewH=H/zoom;const first=Math.floor(cam.y/TILE_H)-1;const last=Math.ceil((cam.y+viewH)/TILE_H)+1;ctx.save();ctx.scale(zoom,zoom);for(let i=first;i<=last;i++){ctx.drawImage(tile,-cam.x,i*TILE_H-cam.y,TILE_W,TILE_H)}ctx.restore()}
-function drawCar(t,cam){const x=(t.x-cam.x)*zoom,y=(t.y-cam.y)*zoom;ctx.save();ctx.translate(x,y);const vertical=Math.abs(t.vy)>Math.abs(t.vx);const w=(vertical?18:32)*zoom,h=(vertical?34:18)*zoom;ctx.fillStyle='#111';ctx.fillRect(-w/2-2,-h/2-2,w+4,h+4);ctx.fillStyle=t.c;ctx.fillRect(-w/2,-h/2,w,h);ctx.fillStyle='#b8d9dd';if(vertical){ctx.fillRect(-6*zoom,-10*zoom,12*zoom,7*zoom);ctx.fillRect(-6*zoom,4*zoom,12*zoom,7*zoom)}else{ctx.fillRect(-10*zoom,-6*zoom,7*zoom,12*zoom);ctx.fillRect(3*zoom,-6*zoom,7*zoom,12*zoom)}if(t.type==='tuk'){ctx.fillStyle='#e2c34d';ctx.fillRect(-5*zoom,-5*zoom,10*zoom,10*zoom)}ctx.restore()}
+function drawMap(cam){const viewH=H/zoom;const first=Math.floor(cam.y/TILE_H)-1;const last=Math.ceil((cam.y+viewH)/TILE_H)+1;ctx.save();ctx.scale(zoom,zoom);ctx.filter='contrast(1.10) saturate(1.04)';for(let i=first;i<=last;i++){ctx.drawImage(tile,-cam.x,i*TILE_H-cam.y,TILE_W,TILE_H)}ctx.filter='none';ctx.restore()}
+function drawCar(t,cam){
+ const x=(t.x-cam.x)*zoom,y=(t.y-cam.y)*zoom,z=zoom;
+ const ang=Math.atan2(t.vy,t.vx)+Math.PI/2;
+ const isBus=t.type==='bus',isTuk=t.type==='tuk';
+ const w=isBus?18:(isTuk?18:16),h=isBus?42:(isTuk?30:34);
+ ctx.save();ctx.translate(x,y);ctx.rotate(ang);ctx.scale(z,z);
+ ctx.fillStyle='rgba(0,0,0,.45)';ctx.fillRect(-w/2+2,-h/2+4,w,h);
+ ctx.fillStyle='#090a0b';
+ ctx.fillRect(-w/2-2,-h/2+5,3,8);ctx.fillRect(w/2-1,-h/2+5,3,8);
+ ctx.fillRect(-w/2-2,h/2-13,3,8);ctx.fillRect(w/2-1,h/2-13,3,8);
+ ctx.fillStyle='#17191b';ctx.fillRect(-w/2-1,-h/2-1,w+2,h+2);
+ ctx.fillStyle=t.c;ctx.fillRect(-w/2,-h/2,w,h);
+ ctx.fillStyle='rgba(255,255,255,.14)';ctx.fillRect(-w/2+2,-h/2+2,w-4,6);
+ ctx.fillStyle='rgba(0,0,0,.18)';ctx.fillRect(-w/2+2,h/2-7,w-4,5);
+ ctx.fillStyle='#1c272d';ctx.fillRect(-w/2+3,-h/2+9,w-6,h-18);
+ ctx.fillStyle='#9bc0c9';ctx.fillRect(-w/2+4,-h/2+10,w-8,6);
+ ctx.fillStyle='#6e939d';ctx.fillRect(-w/2+4,h/2-15,w-8,5);
+ ctx.fillStyle='#48666e';ctx.fillRect(-w/2+3,-2,3,8);ctx.fillRect(w/2-6,-2,3,8);
+ ctx.fillStyle='#c9c9c4';ctx.fillRect(-w/2+2,-h/2-2,w-4,2);ctx.fillRect(-w/2+2,h/2,w-4,2);
+ ctx.fillStyle='#ffe69a';ctx.fillRect(-w/2+2,-h/2,3,2);ctx.fillRect(w/2-5,-h/2,3,2);
+ ctx.fillStyle='#e63e37';ctx.fillRect(-w/2+2,h/2-2,3,2);ctx.fillRect(w/2-5,h/2-2,3,2);
+ if(t.type==='taxi'){ctx.fillStyle='#f3e6b0';ctx.fillRect(-4,-4,8,3);ctx.fillStyle='#222';ctx.fillRect(-2,-4,4,1)}
+ if(isTuk){ctx.fillStyle='#15262b';ctx.fillRect(-w/2+2,-4,w-4,13);ctx.fillStyle='#e4c44f';ctx.fillRect(-w/2+1,-7,w-2,4);ctx.fillStyle='#83b9c1';ctx.fillRect(-w/2+4,-3,w-8,5)}
+ if(isBus){ctx.fillStyle='#789aa2';for(let yy=-10;yy<=10;yy+=7)ctx.fillRect(-w/2+3,yy,w-6,4)}
+ ctx.restore();
+}
 function drawBike(cam){
  const x=(p.x-cam.x)*zoom,y=(p.y-cam.y)*zoom,z=zoom;
  const ang={n:0,ne:Math.PI/4,e:Math.PI/2,se:Math.PI*3/4,s:Math.PI,sw:-Math.PI*3/4,w:-Math.PI/2,nw:-Math.PI/4}[p.dir]||0;
