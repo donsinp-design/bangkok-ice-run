@@ -86,7 +86,7 @@ function beep(f=800,d=.08){if(!audio)return;const o=audio.createOscillator(),g=a
 const msg=document.getElementById('message');function flashMsg(s){msg.textContent=s;msg.style.opacity=1;clearTimeout(flashMsg.t);flashMsg.t=setTimeout(()=>msg.style.opacity=0,850)}
 function hit(){if(p.inv>0)return;p.inv=.7;p.melt=Math.min(99,p.melt+5.5);p.vx*=-.18;p.vy*=-.18;shake=7;beep(110,.15);flashMsg('CRASH · ICE MELTING')}
 
-const routeLocal=[{x:646,y:263},{x:663,y:615},{x:803,y:854},{x:600,y:1072},{x:455,y:1353}];
+const routeLocal=[{x:646,y:263},{x:663,y:615},{x:620,y:854},{x:600,y:1072},{x:455,y:1353}];
 let routeIndex=0;
 function targetWorld(){const cycle=Math.floor(routeIndex/routeLocal.length);const local=routeLocal[routeIndex%routeLocal.length];return{x:local.x,y:cycle*TILE_H+local.y}}
 // start target in current tile and progress upward through the endlessly repeated district
@@ -125,7 +125,7 @@ function update(dt,now){
 }
 
 function camera(){return{x:Math.max(0,Math.min(Math.max(0,TILE_W-W/zoom),p.x-W/(2*zoom))),y:p.y-H/(2*zoom)}}
-function drawMap(cam){const viewH=H/zoom;const first=Math.floor(cam.y/TILE_H)-1;const last=Math.ceil((cam.y+viewH)/TILE_H)+1;ctx.save();ctx.scale(zoom,zoom);ctx.filter='brightness(1.10) contrast(1.05) saturate(1.05)';for(let i=first;i<=last;i++){ctx.drawImage(tile,-cam.x,i*TILE_H-cam.y,TILE_W,TILE_H+1)}ctx.filter='none';ctx.restore()}
+function drawMap(cam){const viewH=H/zoom;const first=Math.floor(cam.y/TILE_H)-1;const last=Math.ceil((cam.y+viewH)/TILE_H)+1;ctx.save();ctx.scale(zoom,zoom);for(let i=first;i<=last;i++){ctx.drawImage(tile,-cam.x,i*TILE_H-cam.y,TILE_W,TILE_H)}ctx.restore()}
 function drawCar(t,cam){const x=(t.x-cam.x)*zoom,y=(t.y-cam.y)*zoom;ctx.save();ctx.translate(x,y);const vertical=Math.abs(t.vy)>Math.abs(t.vx);const w=(vertical?18:32)*zoom,h=(vertical?34:18)*zoom;ctx.fillStyle='#111';ctx.fillRect(-w/2-2,-h/2-2,w+4,h+4);ctx.fillStyle=t.c;ctx.fillRect(-w/2,-h/2,w,h);ctx.fillStyle='#b8d9dd';if(vertical){ctx.fillRect(-6*zoom,-10*zoom,12*zoom,7*zoom);ctx.fillRect(-6*zoom,4*zoom,12*zoom,7*zoom)}else{ctx.fillRect(-10*zoom,-6*zoom,7*zoom,12*zoom);ctx.fillRect(3*zoom,-6*zoom,7*zoom,12*zoom)}if(t.type==='tuk'){ctx.fillStyle='#e2c34d';ctx.fillRect(-5*zoom,-5*zoom,10*zoom,10*zoom)}ctx.restore()}
 function drawBike(cam){
  const x=(p.x-cam.x)*zoom,y=(p.y-cam.y)*zoom,z=zoom;
