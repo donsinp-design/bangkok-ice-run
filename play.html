@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>Bangkok Ice Run Reference</title>
+<style>
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+html,body{margin:0;width:100%;height:100%;overflow:hidden;background:#08090a;color:#fff;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}
+canvas{position:fixed;inset:0;width:100%;height:100%;touch-action:none;background:#08090a}
+#overlay{position:fixed;inset:0;display:grid;place-items:center;background:rgba(0,0,0,.55);z-index:20;padding:24px}
+.card{width:min(480px,92vw);background:rgba(8,8,9,.9);border:3px solid #f0e7d8;padding:22px;text-align:center;box-shadow:8px 8px 0 #000}
+.logo{font-weight:1000;font-size:clamp(34px,10vw,64px);line-height:.78;letter-spacing:-.08em}
+.logo b{color:#67c8ff}
+.copy{margin:16px 0 18px;color:#d8d0c4;font-size:13px;line-height:1.5}
+#start{width:100%;padding:14px 18px;border:0;background:#ffd455;color:#16120b;font:1000 14px ui-monospace,monospace;letter-spacing:.12em;box-shadow:4px 4px 0 #806100}
+#status{position:fixed;left:50%;transform:translateX(-50%);bottom:12px;font-size:11px;opacity:.9;text-shadow:0 2px 0 #000}
+#touch{position:fixed;inset:0;pointer-events:none;display:none;z-index:15}
+.pad{position:absolute;left:14px;bottom:calc(14px + env(safe-area-inset-bottom));width:148px;height:148px;pointer-events:auto}
+.btn{position:absolute;width:52px;height:52px;border:2px solid rgba(255,255,255,.82);background:rgba(8,8,9,.58);color:#fff;display:grid;place-items:center;font:1000 22px monospace;box-shadow:2px 2px 0 rgba(0,0,0,.6)}
+.btn.on{background:rgba(255,255,255,.2)}
+.up{left:48px;top:0} .down{left:48px;bottom:0} .left{left:0;top:48px} .right{right:0;top:48px}
+#brake{position:absolute;right:18px;bottom:calc(24px + env(safe-area-inset-bottom));width:82px;height:82px;border-radius:50%;border:3px solid rgba(255,255,255,.85);background:rgba(255,76,60,.36);color:#fff;font:1000 11px ui-monospace,monospace;letter-spacing:.1em;pointer-events:auto}
+@media (pointer:coarse){#touch{display:block} #status{display:none}}
+</style>
+</head>
+<body>
+<canvas id="game"></canvas>
+<div id="touch">
+  <div class="pad">
+    <button class="btn up" data-key="ArrowUp">▲</button>
+    <button class="btn down" data-key="ArrowDown">▼</button>
+    <button class="btn left" data-key="ArrowLeft">◀</button>
+    <button class="btn right" data-key="ArrowRight">▶</button>
+  </div>
+  <button id="brake">BRAKE</button>
+</div>
+<div id="overlay"><div class="card"><div class="logo">BANGKOK<br><b>ICE RUN</b></div><div class="copy">Updated to match your reference shot. Same Bangkok scene, same HUD feel, playable on top of the image. Ride the road, avoid traffic, deliver before the ice melts.</div><button id="start">TAP TO RIDE</button></div></div>
+<div id="status">ARROWS / WASD TO RIDE · SPACE TO BRAKE</div>
+<script>
+(() => {
+'use strict';
+const bg = new Image();
+fetch('reference.b64').then(r => r.text()).then(t => { bg.src = 'data:image/png;base64,' + t.trim(); });
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+let W = innerWidth, H = innerHeight, DPR = Math.min(devicePixelRatio || 1, 2);
+function resize() {
+  W = innerWidth; H = innerHeight; DPR = Math.min(devicePixelRatio || 1, 2);
+  canvas.width = Math.round(W * DPR); canvas.height = Math.round(H * DPR);
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.imageSmoothingEnabled = false;
+}
+addEventListener('resize', resize); resize();
+
+const WORLD = { w: 1536, h: 682 };
+function fitRect(srcW, srcH, dstW, dstH) {
+  const scale = Math.min(dstW / srcW, dstH / srcH);
+  const w = srcW * scale, h = srcH * scale;
+  return { x: (dstW - w) / 2, y: (dstH - h) / 2, w, h, scale };
+}
+function sx(x, view) { return view.x + x * view.scale; }
+function sy(y, view) { return view.y + y * view.scale; }
+
+const overlay = document.getElementById('overlay');
+const startBtn = document.getElementById('start');
+const brakeBtn = document.getElementById('brake');
+const keys = Object.create(null);
+['keydown','keyup'].forEach(type => addEventListener(type, e => {
+  const on = type === 'keydown';
+  if (e.key in keys || ['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' ','a','s','d','w','A','S','D','W'].includes(e.key)) {
+    keys[e.key] = on;
+    if (['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key)) e.preventDefault();
+  }
+}));
+document.querySelectorAll('.btn').forEach(el => {
+  const k = el.dataset.key;
+  const on = e => { e.preventDefault(); keys[k] = true; el.classList.add('on'); };
+  const off = e => { e.preventDefault(); keys[k] = false; el.classList.remove('on'); };
+  el.addEventListener('pointerdown', on); el.addEventListener('pointerup', off); el.addEventListener('pointercancel', off); el.addEventListener('pointerleave', off);
+});
+brakeBtn.addEventListener('pointerdown', e => { e.preventDefault(); keys[' '] = true; });
+['pointerup','pointercancel'].forEach(t => brakeBtn.addEventListener(t, e => { e.preventDefault(); keys[' '] = false; }));
+
+const road = { x: 520, y: 0, w: 360, h: 682 };
+const obstacles = [
+  {x: 595, y: 92, w: 115, h: 145},   // pink car
+  {x: 562, y: 474, w: 115, h: 132},  // taxi
+  {x: 878, y: 74, w: 138, h: 98},    // tuk tuk
+  {x: 1288, y: 82, w: 174, h: 226},  // boat edge
+  {x: 1036, y: 214, w: 198, h: 300}, // sign + shrine + footpath blockage
+  {x: 0, y: 520, w: 120, h: 162},    // bus corner
+  {x: 0, y: 0, w: 505, h: 682},      // left sidewalk/HUD block
+  {x: 890, y: 0, w: 646, h: 682}     // right canal side
+];
+const checkpoints = [
+  {x: 760, y: 110, label:'COOL SPOT 1'},
+  {x: 790, y: 615, label:'COOL SPOT 2'},
+  {x: 744, y: 355, label:'COOL SPOT 3'}
+];
+const ai = [
+  {x: 595, y: 520, w: 104, h: 132, vy: -58, color:'#e6c13a'},
+  {x: 598, y: 120, w: 104, h: 132, vy: 42, color:'#e782a5'},
+  {x: 868, y: 138, w: 120, h: 90, vy: 0, color:'#2f64a0'}
+];
+
+const game = {
+  running: false,
+  timer: 165,
+  ice: 8,
+  maxIce: 8,
+  melt: 24,
+  cash: 215,
+  temp: 40,
+  checkpoint: 0,
+  hitFlash: 0
+};
+const player = { x: 760, y: 250, vx: 0, vy: 0, angle: Math.PI/2, trail: [], inv: 0 };
+
+function reset() {
+  game.running = true; game.timer = 165; game.ice = 8; game.melt = 24; game.cash = 215; game.checkpoint = 0; game.hitFlash = 0;
+  player.x = 760; player.y = 250; player.vx = 0; player.vy = 0; player.angle = Math.PI/2; player.trail = []; player.inv = 0;
+}
+function hit() {
+  if (player.inv > 0) return;
+  player.inv = 0.8; game.hitFlash = 0.18; game.melt = Math.min(99, game.melt + 6); player.vx *= -0.2; player.vy *= -0.2;
+}
+function collideRect(px, py, r, rect) {
+  return px + r > rect.x && px - r < rect.x + rect.w && py + r > rect.y && py - r < rect.y + rect.h;
+}
+function update(dt) {
+  if (!game.running) return;
+  player.inv = Math.max(0, player.inv - dt);
+  game.hitFlash = Math.max(0, game.hitFlash - dt);
+  let ix = 0, iy = 0;
+  if (keys.ArrowLeft || keys.a || keys.A) ix -= 1;
+  if (keys.ArrowRight || keys.d || keys.D) ix += 1;
+  if (keys.ArrowUp || keys.w || keys.W) iy -= 1;
+  if (keys.ArrowDown || keys.s || keys.S) iy += 1;
+  if (ix || iy) {
+    const m = Math.hypot(ix, iy); ix /= m; iy /= m;
+    const accel = keys[' '] ? 180 : 360;
+    player.vx += ix * accel * dt; player.vy += iy * accel * dt;
+    player.angle = Math.atan2(iy, ix);
+  }
+  const drag = Math.pow(keys[' '] ? 0.04 : 0.17, dt);
+  player.vx *= drag; player.vy *= drag;
+  const max = keys[' '] ? 90 : 240;
+  const sp = Math.hypot(player.vx, player.vy);
+  if (sp > max) { player.vx = player.vx / sp * max; player.vy = player.vy / sp * max; }
+  player.x += player.vx * dt; player.y += player.vy * dt;
+
+  if (player.x < road.x + 18 || player.x > road.x + road.w - 18 || player.y < 40 || player.y > WORLD.h - 40) hit();
+  player.x = Math.max(road.x + 18, Math.min(road.x + road.w - 18, player.x));
+  player.y = Math.max(40, Math.min(WORLD.h - 40, player.y));
+  for (const o of obstacles) if (collideRect(player.x, player.y, 18, o)) hit();
+
+  for (const car of ai) {
+    if (car.vy) {
+      car.y += car.vy * dt;
+      if (car.vy < 0 && car.y < -160) car.y = 790;
+      if (car.vy > 0 && car.y > 790) car.y = -160;
+    }
+    if (collideRect(player.x, player.y, 18, car)) hit();
+  }
+
+  game.timer = Math.max(0, game.timer - dt);
+  game.melt = Math.min(99, game.melt + dt * 1.8 + Math.hypot(player.vx, player.vy) * 0.0035);
+  if (game.melt >= 100 || game.timer <= 0) { game.running = false; overlay.style.display = 'grid'; document.querySelector('.copy').textContent = 'The load melted. Same visual style, but now it needs a real expanded level build next.'; startBtn.textContent = 'TRY AGAIN'; }
+
+  if (Math.hypot(player.vx, player.vy) > 40) {
+    player.trail.push({x: player.x - Math.cos(player.angle) * 16, y: player.y - Math.sin(player.angle) * 16, life: 1.0, big: Math.random() < 0.25});
+    if (player.trail.length > 60) player.trail.shift();
+  }
+  for (const t of player.trail) t.life -= dt * 0.9;
+  player.trail = player.trail.filter(t => t.life > 0);
+
+  const cp = checkpoints[game.checkpoint];
+  if (cp && Math.hypot(player.x - cp.x, player.y - cp.y) < 32) {
+    game.checkpoint += 1;
+    game.cash += 50;
+    game.ice = Math.max(0, game.ice - 1);
+    if (game.checkpoint >= checkpoints.length) {
+      game.running = false; overlay.style.display = 'grid'; document.querySelector('.copy').textContent = 'Now it matches the reference scene. Deliveries complete.'; startBtn.textContent = 'RIDE AGAIN';
+    }
+  }
+}
+
+function drawBike(view) {
+  const x = sx(player.x, view), y = sy(player.y, view), s = view.scale;
+  ctx.save(); ctx.translate(x, y); ctx.rotate(player.angle + Math.PI / 2);
+  if (player.inv > 0 && Math.floor(player.inv * 14) % 2) ctx.globalAlpha = 0.45;
+  ctx.fillStyle = '#111'; ctx.fillRect(-6*s, -19*s, 12*s, 38*s);
+  ctx.fillStyle = '#e4aa46'; ctx.fillRect(-8*s, -18*s, 16*s, 10*s); // rider
+  ctx.fillStyle = '#1e2329'; ctx.fillRect(-7*s, -14*s, 14*s, 10*s); // helmet
+  ctx.fillStyle = '#9ed8ff'; ctx.fillRect(-10*s, -4*s, 20*s, 20*s); // ice box
+  ctx.strokeStyle = '#5aaad8'; ctx.lineWidth = Math.max(1, s);
+  ctx.strokeRect(-10*s, -4*s, 20*s, 20*s);
+  ctx.fillStyle = '#2c5f93'; ctx.fillRect(-7*s, 17*s, 14*s, 8*s); // rear fender
+  ctx.fillStyle = '#e23d30'; ctx.fillRect(-6*s, 9*s, 12*s, 8*s);
+  ctx.fillStyle = '#d7edf8'; ctx.font = `${Math.max(7, 7*s)}px monospace`; ctx.textAlign = 'center'; ctx.fillText('ICE', 0, 9*s);
+  ctx.restore();
+}
+function drawTrail(view) {
+  for (const t of player.trail) {
+    ctx.globalAlpha = Math.max(0, t.life * 0.8);
+    const x = sx(t.x, view), y = sy(t.y, view), s = view.scale;
+    ctx.fillStyle = '#8fd7ff';
+    const r = t.big ? 4 * s : 2.6 * s;
+    ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+}
+function drawAICars(view) {
+  for (const car of ai) {
+    const x = sx(car.x, view), y = sy(car.y, view), w = car.w * view.scale, h = car.h * view.scale;
+    ctx.fillStyle = '#111'; ctx.fillRect(x - w/2 - 2, y - h/2 - 2, w + 4, h + 4);
+    ctx.fillStyle = car.color; ctx.fillRect(x - w/2, y - h/2, w, h);
+    ctx.fillStyle = '#b9d7dd'; ctx.fillRect(x - w*0.18, y - h*0.24, w*0.36, h*0.18); ctx.fillRect(x - w*0.18, y + h*0.08, w*0.36, h*0.18);
+  }
+}
+function drawCheckpoint(view) {
+  const cp = checkpoints[game.checkpoint];
+  if (!cp) return;
+  const x = sx(cp.x, view), y = sy(cp.y, view);
+  const pulse = 22 * view.scale + Math.sin(performance.now() / 140) * 4 * view.scale;
+  ctx.strokeStyle = '#6cf0ff'; ctx.lineWidth = Math.max(2, 2 * view.scale);
+  ctx.beginPath(); ctx.arc(x, y, pulse, 0, Math.PI * 2); ctx.stroke();
+  ctx.fillStyle = 'rgba(108,240,255,0.15)'; ctx.beginPath(); ctx.arc(x, y, 12 * view.scale, 0, Math.PI * 2); ctx.fill();
+}
+function drawHUD(view) {
+  const box = (x,y,w,h) => { ctx.fillStyle = 'rgba(0,0,0,0.68)'; ctx.fillRect(x,y,w,h); ctx.strokeStyle = '#353535'; ctx.lineWidth = 2; ctx.strokeRect(x,y,w,h); };
+  const left = sx(31, view), top = sy(31, view), scale = view.scale;
+  box(left, top, 256*scale, 160*scale);
+  ctx.fillStyle = '#f0efec'; ctx.font = `${24*scale}px monospace`; ctx.textBaseline = 'top';
+  ctx.fillText('DELIVER ICE', left + 16*scale, top + 12*scale); ctx.fillText('TO COOL SPOT', left + 16*scale, top + 42*scale);
+  ctx.strokeStyle = '#aaa'; ctx.beginPath(); ctx.moveTo(left+16*scale, top+82*scale); ctx.lineTo(left+240*scale, top+82*scale); ctx.stroke();
+  ctx.fillStyle = '#e3bc70'; ctx.font = `${18*scale}px monospace`;
+  const mm = String(Math.floor(game.timer / 60)).padStart(2,'0'); const ss = String(Math.floor(game.timer % 60)).padStart(2,'0');
+  ctx.fillText(`TIME: ${mm}:${ss}`, left + 16*scale, top + 92*scale);
+  ctx.fillStyle = '#efe8d3';
+  ctx.fillText(`ICE LEFT: ${game.ice}/${game.maxIce}`, left + 16*scale, top + 122*scale);
+  ctx.fillText(`MELT: ${Math.floor(game.melt)}%`, left + 16*scale, top + 152*scale);
+
+  const right = sx(1296, view), rt = sy(28, view); box(right, rt, 186*scale, 56*scale); box(right, rt+65*scale, 186*scale, 56*scale);
+  ctx.fillStyle = '#f29c3d'; ctx.font = `${18*scale}px monospace`; ctx.fillText('☀', right + 14*scale, rt + 16*scale); ctx.fillText(`${game.temp}°C`, right + 60*scale, rt + 16*scale);
+  ctx.fillStyle = '#76d65a'; ctx.fillText(`$${game.cash}`, right + 48*scale, rt + 81*scale);
+}
+function drawHitFlash() {
+  if (game.hitFlash <= 0) return;
+  ctx.fillStyle = `rgba(255,65,55,${game.hitFlash * 0.38})`;
+  ctx.fillRect(0,0,W,H);
+}
+function render() {
+  ctx.clearRect(0,0,W,H);
+  const view = fitRect(WORLD.w, WORLD.h, W, H);
+  if (bg.complete) ctx.drawImage(bg, view.x, view.y, view.w, view.h);
+  drawCheckpoint(view);
+  drawAICars(view);
+  drawTrail(view);
+  drawBike(view);
+  drawHUD(view);
+  drawHitFlash();
+}
+
+let last = performance.now();
+function loop(t) { const dt = Math.min(0.033, (t - last) / 1000 || 0); last = t; update(dt); render(); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+startBtn.addEventListener('click', e => { e.preventDefault(); overlay.style.display = 'none'; reset(); });
+startBtn.addEventListener('pointerup', e => { e.preventDefault(); overlay.style.display = 'none'; reset(); });
+})();
+</script>
+</body>
+</html>
